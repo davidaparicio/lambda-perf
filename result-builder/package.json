@@ -2,7 +2,7 @@
   "name": "result-builder",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "app.mjs",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -10,7 +10,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@octokit/rest": "^20.0.1"
+    "@octokit/rest": "^21.0.0"
   },
   "devDependencies": {
     "@aws-sdk/client-dynamodb": "^3.145.0"

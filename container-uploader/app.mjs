@@ -13,9 +13,18 @@ const buildDockerImage = async (
   region,
   runtime,
   architecture,
+  hasSpecificImageBuild,
   delayInMs
 ) => {
-  await getFromS3(s3Client, region, runtime.path, architecture, delayInMs, 0);
+  await getFromS3(
+    s3Client,
+    region,
+    runtime.path,
+    architecture,
+    hasSpecificImageBuild,
+    delayInMs,
+    0
+  );
   if (
     fs.existsSync(runtime.path) &&
     runtime.path !== "." &&
@@ -43,6 +52,7 @@ const getFromS3 = async (
   region,
   path,
   architecture,
+  hasSpecificImageBuild,
   delayInMs,
   nbRetry
 ) => {
@@ -50,7 +60,10 @@ const getFromS3 = async (
   if (nbRetry > 5) {
     throw new Error("Too many retries");
   }
-  const codeFilename = `code_${architecture}.zip`;
+
+  const codeFilename = hasSpecificImageBuild
+    ? `code_${architecture}_image.zip`
+    : `code_${architecture}.zip`;
 
   const getObjectParams = {
     Bucket: `lambda-perf-${region}`,
@@ -70,36 +83,51 @@ const getFromS3 = async (
   } catch (e) {
     console.error(e);
     await sleep(delayInMs);
-    await getFromS3(client, region, path, architecture, delayInMs, nbRetry + 1);
+    await getFromS3(
+      client,
+      region,
+      path,
+      architecture,
+      hasSpecificImageBuild,
+      delayInMs,
+      nbRetry + 1
+    );
   }
 };
 
-const run = async () => {
-  const REGION = process.env.AWS_REGION;
-  const ACCOUNT_ID = process.env.ACCOUNT_ID;
-  const ARCHITECTURE = process.env.ARCHITECTURE;
+const run = async (accountId, runtime, architecture, region) => {
   const SLEEP_DELAY_IN_MILLISEC = 5000;
-
   const s3Client = new S3Client();
-  for (const runtime of manifest.runtimes) {
-    console.log(runtime);
-    for (const architecture of runtime.architectures) {
-      console.log(architecture);
-      if (architecture === ARCHITECTURE) {
-        console.log("building image");
-        if (runtime.hasOwnProperty("image")) {
-          await buildDockerImage(
-            ACCOUNT_ID,
-            s3Client,
-            REGION,
-            runtime,
-            architecture,
-            SLEEP_DELAY_IN_MILLISEC
-          );
-        }
-      }
-    }
+  console.log("building image");
+  if (runtime.hasOwnProperty("image")) {
+    const hasSpecificImageBuild =
+      runtime.hasOwnProperty("hasSpecificImageBuild") &&
+      runtime.hasSpecificImageBuild === true;
+    await buildDockerImage(
+      accountId,
+      s3Client,
+      region,
+      runtime,
+      architecture,
+      hasSpecificImageBuild,
+      SLEEP_DELAY_IN_MILLISEC
+    );
   }
 };
 
-await run();
+const runtimeFromRuntimeId = (manifest, runtimeId) => {
+  const runtime = manifest.find(r => {
+    return r.path === runtimeId;
+  });
+  if(!runtime) {
+    throw "cound not find the runtime"
+  }
+  console.log(runtime);
+  return runtime;
+}
+
+console.log('region = ', process.env.AWS_REGION);
+console.log('architecure = ', process.env.ARCHITECTURE);
+console.log('runtimeId = ', process.env.RUNTIME_ID);
+
+await run(process.env.AWS_ACCOUNT_ID, runtimeFromRuntimeId(manifest.runtimes, process.env.RUNTIME_ID), process.env.ARCHITECTURE, process.env.AWS_REGION);
